@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>星弈五子棋 · 单文件版</title>
+  <title>星弈五子棋 · 高帧率单文件版</title>
   <style>
     :root{
       --bg:#07111f;
@@ -40,7 +40,7 @@
     .dot.ok{background:var(--good);box-shadow:0 0 0 4px rgba(34,197,94,.12)}
     .dot.warn{background:var(--warn);box-shadow:0 0 0 4px rgba(245,158,11,.12)}
 
-    .shell{border:1px solid var(--line);background:linear-gradient(180deg,rgba(15,23,42,.8),rgba(15,23,42,.63));backdrop-filter:blur(18px);box-shadow:var(--shadow);border-radius:28px;overflow:hidden}
+    .shell{border:1px solid var(--line);background:linear-gradient(180deg,rgba(15,23,42,.94),rgba(15,23,42,.90));box-shadow:var(--shadow);border-radius:28px;overflow:hidden;contain:layout paint}
     .screen{display:none;min-height:670px}
     .screen.active{display:block}
 
@@ -82,8 +82,12 @@
     .game-title h2{margin:0;font-size:20px}
     .turn-badge{padding:8px 12px;border-radius:999px;background:rgba(30,41,59,.72);border:1px solid var(--line);font-size:13px;color:#dbeafe}
     .board-wrap{position:relative;display:grid;place-items:center;flex:1;min-height:0}
-    canvas{width:min(100%,680px);aspect-ratio:1;display:block;border-radius:22px;box-shadow:0 22px 50px rgba(0,0,0,.28);touch-action:manipulation}
-    .thinking{position:absolute;inset:auto 50% 18px auto;transform:translateX(50%);padding:9px 14px;border-radius:999px;background:rgba(2,6,23,.78);border:1px solid rgba(255,255,255,.1);font-size:12px;color:#cbd5e1;display:none}
+    .board-stack{position:relative;width:min(100%,680px);aspect-ratio:1;border-radius:22px;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.20);contain:strict;isolation:isolate}
+    .board-stack canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:22px;contain:strict}
+    #board{z-index:1;touch-action:manipulation;cursor:crosshair}
+    #stones{z-index:2;pointer-events:none}
+    #marker{z-index:3;pointer-events:none}
+    .thinking{position:absolute;z-index:5;inset:auto 50% 18px auto;transform:translateX(50%);padding:9px 14px;border-radius:999px;background:rgba(2,6,23,.78);border:1px solid rgba(255,255,255,.1);font-size:12px;color:#cbd5e1;display:none}
     .thinking.show{display:block}
 
     .side{border-left:1px solid var(--line);padding:24px;background:rgba(2,6,23,.2);display:flex;flex-direction:column;gap:16px}
@@ -106,7 +110,7 @@
     .room-code{font-size:34px;letter-spacing:.18em;font-weight:900;text-align:center;padding:14px 0;background:rgba(15,23,42,.7);border-radius:16px;margin-bottom:10px}
     .net-state{font-size:12px;color:var(--muted);line-height:1.6}
 
-    .modal-mask{position:fixed;inset:0;background:rgba(2,6,23,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:20px;z-index:30}
+    .modal-mask{position:fixed;inset:0;background:rgba(2,6,23,.88);display:none;align-items:center;justify-content:center;padding:20px;z-index:30}
     .modal-mask.show{display:flex}
     .modal{width:min(560px,100%);background:#0f172a;border:1px solid rgba(148,163,184,.2);border-radius:24px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
     .modal h3{margin:0 0 8px;font-size:22px}
@@ -128,6 +132,9 @@
     .result-title{font-size:40px;text-align:center;margin:4px 0 8px}
     .result-desc{text-align:center!important}
 
+    @media (pointer:coarse){
+      .mode-card,.btn{transition:none}.logo{box-shadow:none}.shell{box-shadow:none}.board-stack{box-shadow:0 6px 16px rgba(0,0,0,.16)}
+    }
     @media (max-width:900px){
       .menu{padding:30px}.hero{grid-template-columns:1fr}.hero-art{display:none}.mode-grid{grid-template-columns:1fr}
       .game-wrap{grid-template-columns:1fr}.side{border-left:0;border-top:1px solid var(--line)}.screen{min-height:auto}.board-side{padding:16px}.side{padding:16px}
@@ -152,7 +159,7 @@
       <div class="hero">
         <div>
           <h2>落子之间，<br><span>胜负已定。</span></h2>
-          <p>15×15 标准棋盘，支持四档 AI、人机对战、同屏双人，以及通过 WebRTC DataChannel 的双人联机模式。联机采用 4 位房间码；单文件版使用 PeerJS Cloud 完成握手，棋步仍通过点对点连接传输。</p>
+          <p>15×15 标准棋盘，支持四档 AI、人机对战、同屏双人，以及通过 WebRTC DataChannel 的双人联机模式。联机采用 4 位房间码；单文件版使用 PeerJS Cloud 完成握手，棋步仍通过点对点连接传输。已启用棋盘缓存与 Web Worker AI，降低掉帧与界面卡顿。</p>
         </div>
         <div class="hero-art" aria-hidden="true">
           <i class="stone black s1"></i><i class="stone white s2"></i><i class="stone black s3"></i><i class="stone white s4"></i><i class="stone black s5"></i>
@@ -186,7 +193,11 @@
             <div id="turnBadge" class="turn-badge">黑棋回合</div>
           </div>
           <div class="board-wrap">
-            <canvas id="board" width="760" height="760"></canvas>
+            <div class="board-stack">
+              <canvas id="board" width="760" height="760" aria-label="五子棋棋盘"></canvas>
+              <canvas id="stones" width="760" height="760" aria-hidden="true"></canvas>
+              <canvas id="marker" width="760" height="760" aria-hidden="true"></canvas>
+            </div>
             <div id="thinking" class="thinking">AI 思考中…</div>
           </div>
         </div>
@@ -280,7 +291,16 @@
   const EMPTY = 0, BLACK = 1, WHITE = 2;
   const DIRS = [[1,0],[0,1],[1,1],[1,-1]];
   const canvas = document.getElementById('board');
-  const ctx = canvas.getContext('2d');
+  const stonesCanvas = document.getElementById('stones');
+  const markerCanvas = document.getElementById('marker');
+  // 分层渲染：棋盘 / 棋子 / 最后一步标记互不干扰。
+  // desynchronized 在支持的浏览器中可进一步降低输入到显示的延迟。
+  const ctx = canvas.getContext('2d', {alpha:false, desynchronized:true});
+  const stonesCtx = stonesCanvas.getContext('2d', {alpha:true, desynchronized:true});
+  const markerCtx = markerCanvas.getContext('2d', {alpha:true, desynchronized:true});
+  const stoneSprites = {black:null, white:null, cssSize:0, dpr:1};
+  let renderRaf = 0, resizeRaf = 0;
+  let aiWorker = null, aiJob = 0;
 
   let board = Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
   let current = BLACK;
@@ -305,8 +325,11 @@
   function init(){
     $('stunUrls').value = localStorage.getItem('gomoku.stun') || 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302';
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    canvas.addEventListener('pointerdown', onBoardPointer);
+    window.addEventListener('resize', ()=>{
+      if(resizeRaf) cancelAnimationFrame(resizeRaf);
+      resizeRaf=requestAnimationFrame(()=>{resizeRaf=0;resizeCanvas();});
+    }, {passive:true});
+    canvas.addEventListener('pointerdown', onBoardPointer, {passive:true});
     drawBoard();
   }
 
@@ -333,8 +356,10 @@
   }
 
   function resetBoard(){
+    cancelAiWork();
     board = Array.from({length:SIZE},()=>Array(SIZE).fill(EMPTY));
     current = BLACK; gameOver = false; history = []; lastMove = null; aiBusy = false;
+    $('thinking').classList.remove('show');
     updateGameUI(); drawBoard();
   }
 
@@ -360,16 +385,26 @@
 
   function resizeCanvas(){
     if(!$('gameScreen').classList.contains('active')) return;
-    const wrap = canvas.parentElement;
-    const cssSize = Math.max(280, Math.min(680, wrap.clientWidth, window.innerHeight - (window.innerWidth < 900 ? 180 : 120)));
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.style.width = cssSize + 'px';
-    canvas.style.height = cssSize + 'px';
-    canvas.width = Math.round(cssSize * dpr);
-    canvas.height = Math.round(cssSize * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const boardWrap = canvas.closest('.board-wrap');
+    const stack = canvas.parentElement;
+    const cssSize = Math.max(280, Math.min(680, boardWrap.clientWidth, window.innerHeight - (window.innerWidth < 900 ? 180 : 120)));
+    const coarse = matchMedia('(pointer:coarse)').matches;
+    // 本地双人优先响应速度；高 DPR 对棋盘观感提升有限，却会显著增加像素填充量。
+    const dpr = Math.min(window.devicePixelRatio || 1, coarse ? 1 : 1.25);
+    const pxW = Math.round(cssSize * dpr);
+    if(canvas._cssSize===cssSize && canvas.width===pxW) return;
+    stack.style.width = cssSize + 'px';
+    stack.style.height = cssSize + 'px';
+    for(const c of [canvas, stonesCanvas, markerCanvas]){
+      c.width = pxW;
+      c.height = pxW;
+    }
+    for(const c of [ctx, stonesCtx, markerCtx]) c.setTransform(dpr,0,0,dpr,0,0);
     canvas._cssSize = cssSize;
-    drawBoard();
+    canvas._dpr = dpr;
+    buildBoardLayer();
+    buildStoneSprites();
+    renderBoardNow();
   }
 
   function geometry(){
@@ -379,44 +414,94 @@
     return {s,pad,grid};
   }
 
-  function drawBoard(){
+  function buildBoardLayer(){
     const {s,pad,grid}=geometry();
-    ctx.clearRect(0,0,s,s);
-    const g=ctx.createLinearGradient(0,0,s,s); g.addColorStop(0,'#d6a45b'); g.addColorStop(.55,'#c58a43'); g.addColorStop(1,'#b77434');
-    ctx.fillStyle=g; roundRect(ctx,0,0,s,s,22); ctx.fill();
-
-    ctx.strokeStyle='rgba(71,39,13,.64)'; ctx.lineWidth=1;
+    const dpr=canvas._dpr || 1;
+    const c=ctx;
+    c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,s,s);
+    const g=c.createLinearGradient(0,0,s,s);
+    g.addColorStop(0,'#d6a45b'); g.addColorStop(.55,'#c58a43'); g.addColorStop(1,'#b77434');
+    c.fillStyle=g; roundRect(c,0,0,s,s,22); c.fill();
+    c.strokeStyle='rgba(71,39,13,.64)'; c.lineWidth=1;
+    c.beginPath();
     for(let i=0;i<SIZE;i++){
-      const p=pad+i*grid;
-      ctx.beginPath();ctx.moveTo(pad,p);ctx.lineTo(s-pad,p);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(p,pad);ctx.lineTo(p,s-pad);ctx.stroke();
+      const p=Math.round((pad+i*grid)*2)/2;
+      c.moveTo(pad,p);c.lineTo(s-pad,p);
+      c.moveTo(p,pad);c.lineTo(p,s-pad);
     }
-    [3,7,11].forEach(y=>[3,7,11].forEach(x=>{
-      if((x===7&&y!==7)||(y===7&&x!==7)) return;
-      ctx.beginPath();ctx.arc(pad+x*grid,pad+y*grid,Math.max(2.2,grid*.075),0,Math.PI*2);ctx.fillStyle='rgba(60,31,8,.82)';ctx.fill();
-    }));
-    drawStar(7,7);
-
-    for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) if(board[y][x]) drawStone(x,y,board[y][x],grid,pad);
-    if(lastMove){
-      const cx=pad+lastMove.x*grid, cy=pad+lastMove.y*grid;
-      ctx.beginPath();ctx.arc(cx,cy,Math.max(3,grid*.11),0,Math.PI*2);ctx.fillStyle=lastMove.color===BLACK?'#fb7185':'#dc2626';ctx.fill();
+    c.stroke();
+    const stars=[[3,3],[11,3],[7,7],[3,11],[11,11]];
+    c.fillStyle='rgba(60,31,8,.82)';
+    for(const [x,y] of stars){
+      c.beginPath();c.arc(pad+x*grid,pad+y*grid,Math.max(2.8,grid*.08),0,Math.PI*2);c.fill();
     }
   }
 
-  function drawStar(x,y){
-    const {pad,grid}=geometry();
-    ctx.beginPath();ctx.arc(pad+x*grid,pad+y*grid,Math.max(2.8,grid*.08),0,Math.PI*2);ctx.fillStyle='rgba(60,31,8,.82)';ctx.fill();
-  }
-
-  function drawStone(x,y,color,grid,pad){
-    const cx=pad+x*grid, cy=pad+y*grid, r=grid*.41;
-    ctx.save();
-    ctx.shadowColor='rgba(0,0,0,.32)';ctx.shadowBlur=8;ctx.shadowOffsetY=3;
-    const rg=ctx.createRadialGradient(cx-r*.32,cy-r*.38,r*.08,cx,cy,r);
+  function makeStoneSprite(color){
+    const {grid}=geometry();
+    const dpr=canvas._dpr || 1;
+    const cssSize=Math.max(24,grid*1.05);
+    const c=document.createElement('canvas');
+    c.width=Math.ceil(cssSize*dpr); c.height=Math.ceil(cssSize*dpr);
+    const sc=c.getContext('2d'); sc.setTransform(dpr,0,0,dpr,0,0);
+    const cx=cssSize/2, cy=cssSize/2-1, r=grid*.41;
+    sc.shadowColor='rgba(0,0,0,.28)';sc.shadowBlur=5;sc.shadowOffsetY=2;
+    const rg=sc.createRadialGradient(cx-r*.32,cy-r*.38,r*.08,cx,cy,r);
     if(color===BLACK){rg.addColorStop(0,'#64748b');rg.addColorStop(.3,'#1e293b');rg.addColorStop(1,'#020617');}
     else{rg.addColorStop(0,'#ffffff');rg.addColorStop(.45,'#eef2f7');rg.addColorStop(1,'#cbd5e1');}
-    ctx.fillStyle=rg;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.restore();
+    sc.fillStyle=rg;sc.beginPath();sc.arc(cx,cy,r,0,Math.PI*2);sc.fill();
+    return {canvas:c,cssSize};
+  }
+
+  function buildStoneSprites(){
+    const b=makeStoneSprite(BLACK), w=makeStoneSprite(WHITE);
+    stoneSprites.black=b.canvas; stoneSprites.white=w.canvas;
+    stoneSprites.cssSize=b.cssSize; stoneSprites.dpr=canvas._dpr||1;
+  }
+
+  function clearLayer(c, cctx){
+    cctx.save();
+    cctx.setTransform(1,0,0,1,0,0);
+    cctx.clearRect(0,0,c.width,c.height);
+    cctx.restore();
+    const dpr=canvas._dpr||1;
+    cctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function paintStone(x,y,color){
+    const {pad,grid}=geometry();
+    const spriteSize=stoneSprites.cssSize || grid*1.05;
+    const cx=pad+x*grid, cy=pad+y*grid;
+    const img=color===BLACK?stoneSprites.black:stoneSprites.white;
+    if(img) stonesCtx.drawImage(img,cx-spriteSize/2,cy-spriteSize/2,spriteSize,spriteSize);
+  }
+
+  function paintLastMarker(){
+    clearLayer(markerCanvas, markerCtx);
+    if(!lastMove) return;
+    const {pad,grid}=geometry();
+    const cx=pad+lastMove.x*grid, cy=pad+lastMove.y*grid;
+    markerCtx.beginPath();
+    markerCtx.arc(cx,cy,Math.max(3,grid*.11),0,Math.PI*2);
+    markerCtx.fillStyle=lastMove.color===BLACK?'#fb7185':'#dc2626';
+    markerCtx.fill();
+  }
+
+  function drawBoard(){
+    // 仅在重置、悔棋、同步状态时全量重建棋子层。普通落子走增量路径。
+    if(renderRaf) cancelAnimationFrame(renderRaf);
+    renderRaf=requestAnimationFrame(()=>{renderRaf=0;renderBoardNow();});
+  }
+
+  function renderBoardNow(){
+    if(!$('gameScreen').classList.contains('active')) return;
+    clearLayer(stonesCanvas, stonesCtx);
+    for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){
+      const color=board[y][x];
+      if(color) paintStone(x,y,color);
+    }
+    paintLastMarker();
   }
 
   function roundRect(c,x,y,w,h,r){
@@ -441,7 +526,9 @@
   function playMove(x,y,color,fromLocal){
     if(gameOver || board[y][x]!==EMPTY || color!==current) return false;
     board[y][x]=color; history.push({x,y,color}); lastMove={x,y,color};
-    drawBoard();
+    // 热路径只画“这一颗棋子 + 最后一步标记”，不再整盘重绘。
+    paintStone(x,y,color);
+    paintLastMarker();
 
     if(gameMode==='online' && fromLocal) sendGame({type:'move',x,y,color});
 
@@ -455,23 +542,25 @@
     updateGameUI();
 
     if(gameMode==='ai' && current===WHITE && !gameOver){
-      aiBusy=true; $('thinking').classList.add('show');
-      setTimeout(()=>{
-        const m=chooseAiMove(aiLevel);
-        aiBusy=false; $('thinking').classList.remove('show');
-        if(m) playMove(m.x,m.y,WHITE,false);
-      }, 180);
+      aiBusy=true; $('thinking').classList.add('show'); updateGameUI();
+      requestAiMove(aiLevel);
     }
     return true;
   }
 
+  function setTextIfChanged(el, value){
+    const v=String(value);
+    if(el.textContent!==v) el.textContent=v;
+  }
+
   function updateGameUI(){
-    $('moveCount').textContent=history.length;
+    setTextIfChanged($('moveCount'), history.length);
     let t = current===BLACK ? '黑棋回合' : '白棋回合';
     if(gameMode==='online' && !gameOver) t += current===myColor ? ' · 轮到你' : ' · 对方思考中';
     if(gameOver) t='对局结束';
-    $('turnBadge').textContent=t;
-    $('undoBtn').disabled = gameMode==='online' || history.length===0 || aiBusy || gameOver;
+    setTextIfChanged($('turnBadge'), t);
+    const disabled = gameMode==='online' || history.length===0 || aiBusy || gameOver;
+    if($('undoBtn').disabled!==disabled) $('undoBtn').disabled=disabled;
   }
 
   function checkWin(x,y,color,b=board){
@@ -532,10 +621,10 @@
     }
     if(level===3){
       let best=scored[0], bestVal=-Infinity;
-      for(const m of scored.slice(0,12)){
+      for(const m of scored.slice(0,10)){
         const b=cloneBoard(board);b[m.y][m.x]=WHITE;
         let danger=0;
-        for(const o of getCandidates(b,2).slice(0,14)) danger=Math.max(danger,pointScore(b,o.x,o.y,BLACK));
+        for(const o of getCandidates(b,2).slice(0,10)) danger=Math.max(danger,pointScore(b,o.x,o.y,BLACK));
         const val=m.score-danger*.72;
         if(val>bestVal){bestVal=val;best=m;}
       }
@@ -546,17 +635,17 @@
 
   function masterMove(scored){
     let best=scored[0], bestVal=-Infinity;
-    const root=scored.slice(0,10);
+    const root=scored.slice(0,7);
     for(const m of root){
       const b=cloneBoard(board); b[m.y][m.x]=WHITE;
       if(checkWin(m.x,m.y,WHITE,b)) return m;
-      const replies=getCandidates(b,2).map(r=>({...r,score:pointScore(b,r.x,r.y,BLACK)*1.15+pointScore(b,r.x,r.y,WHITE)})).sort((a,b)=>b.score-a.score).slice(0,8);
+      const replies=getCandidates(b,2).map(r=>({...r,score:pointScore(b,r.x,r.y,BLACK)*1.15+pointScore(b,r.x,r.y,WHITE)})).sort((a,b)=>b.score-a.score).slice(0,6);
       let worst=Infinity;
       if(!replies.length) worst=evaluateBoard(b,WHITE);
       for(const r of replies){
         const b2=cloneBoard(b);b2[r.y][r.x]=BLACK;
         if(checkWin(r.x,r.y,BLACK,b2)){worst=-1e12;break;}
-        const next=getCandidates(b2,2).map(n=>({n,score:pointScore(b2,n.x,n.y,WHITE)*1.15+pointScore(b2,n.x,n.y,BLACK)})).sort((a,b)=>b.score-a.score).slice(0,6);
+        const next=getCandidates(b2,2).map(n=>({n,score:pointScore(b2,n.x,n.y,WHITE)*1.15+pointScore(b2,n.x,n.y,BLACK)})).sort((a,b)=>b.score-a.score).slice(0,4);
         let bestReply=-Infinity;
         for(const z of next){
           const b3=cloneBoard(b2);b3[z.n.y][z.n.x]=WHITE;
@@ -589,7 +678,7 @@
       const sc=pointScore(b,c.x,c.y,WHITE)+pointScore(b,c.x,c.y,BLACK)+c.near*10;
       return sc-sa;
     });
-    return arr.slice(0,36);
+    return arr.slice(0,28);
   }
 
   function isWinningMove(b,x,y,color){
@@ -641,6 +730,77 @@
   }
 
   const cloneBoard=b=>b.map(r=>r.slice());
+
+  function cancelAiWork(){
+    aiJob++;
+    if(aiWorker){ try{aiWorker.terminate();}catch{} aiWorker=null; }
+    aiBusy=false;
+  }
+
+  function ensureAiWorker(){
+    if(aiWorker) return aiWorker;
+    if(!window.Worker || !window.Blob || !window.URL) return null;
+    const source = `
+      'use strict';
+      const SIZE=${SIZE}, EMPTY=${EMPTY}, BLACK=${BLACK}, WHITE=${WHITE};
+      const DIRS=${JSON.stringify([[1,0],[0,1],[1,1],[1,-1]])};
+      let board=[], history=[];
+      ${checkWin.toString()}
+      ${chooseAiMove.toString()}
+      ${masterMove.toString()}
+      ${getCandidates.toString()}
+      ${isWinningMove.toString()}
+      ${pointScore.toString()}
+      ${evaluateBoard.toString()}
+      ${getCandidatesOn.toString()}
+      const cloneBoard = ${cloneBoard.toString()};
+      self.onmessage = e => {
+        const {id, level, board:b, history:h}=e.data;
+        board=b; history=h||[];
+        let move=null, error='';
+        try{ move=chooseAiMove(level); }catch(err){ error=err && err.message ? err.message : String(err); }
+        self.postMessage({id,move,error});
+      };
+    `;
+    const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
+    aiWorker=new Worker(url);
+    URL.revokeObjectURL(url);
+    aiWorker.onmessage=e=>{
+      const {id,move,error}=e.data||{};
+      if(id!==aiJob || gameMode!=='ai' || gameOver) return;
+      aiBusy=false; $('thinking').classList.remove('show'); updateGameUI();
+      if(error) console.warn('AI Worker:',error);
+      if(move) playMove(move.x,move.y,WHITE,false);
+    };
+    aiWorker.onerror=e=>{
+      console.warn('AI Worker failed, fallback to main thread',e.message);
+      if(gameMode!=='ai' || gameOver) return;
+      const id=aiJob;
+      setTimeout(()=>{
+        if(id!==aiJob) return;
+        const m=chooseAiMove(Math.min(aiLevel,3));
+        aiBusy=false; $('thinking').classList.remove('show'); updateGameUI();
+        if(m) playMove(m.x,m.y,WHITE,false);
+      },0);
+    };
+    return aiWorker;
+  }
+
+  function requestAiMove(level){
+    const id=++aiJob;
+    const worker=ensureAiWorker();
+    if(worker){
+      // 克隆棋盘给 Worker，AI 搜索不再阻塞页面绘制与触摸响应。
+      worker.postMessage({id,level,board:board.map(r=>r.slice()),history:history.slice()});
+      return;
+    }
+    setTimeout(()=>{
+      if(id!==aiJob) return;
+      const m=chooseAiMove(Math.min(level,3));
+      aiBusy=false; $('thinking').classList.remove('show'); updateGameUI();
+      if(m) playMove(m.x,m.y,WHITE,false);
+    },0);
+  }
 
   // ---------------- Online / WebRTC ----------------
   window.saveNetSettings = () => {
